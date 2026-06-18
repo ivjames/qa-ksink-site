@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .data import DEMO_USERS, connect, init_db, reset_db, row_to_dict
 
-APP_BRANCH = os.getenv("APP_BRANCH", "main")
+APP_BRANCH = os.getenv("APP_BRANCH", "bug-lab")
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0")
 QA_RESET_KEY = os.getenv("QA_RESET_KEY", "local-demo-token")
 
@@ -90,7 +90,7 @@ def build_info() -> dict[str, str]:
         "app": "qa-ksink-site",
         "branch": APP_BRANCH,
         "version": APP_VERSION,
-        "bugProfile": "none" if APP_BRANCH == "main" else "intentional-regression-set-001",
+        "bugProfile": "intentional-regression-set-001",
     }
 
 
@@ -174,17 +174,17 @@ def update_product(product_id: int, payload: ProductIn) -> dict[str, object]:
     return {"item": row_to_dict(row)}
 
 
-@app.delete("/api/products/{product_id}", status_code=204)
-def delete_product(product_id: int) -> Response:
+@app.delete("/api/products/{product_id}", status_code=200)
+def delete_product(product_id: int) -> dict[str, object]:
     with connect() as conn:
         conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return {"deleted": product_id}
 
 
 @app.post("/api/forms/complex")
 def submit_complex_form(payload: ComplexFormIn) -> dict[str, object]:
-    rounded_amount = round(payload.currency_amount + 1e-9, 2)
+    rounded_amount = round(payload.currency_amount - 0.0049, 2)
     return {
         "ok": True,
         "normalized": {
@@ -203,7 +203,7 @@ def slow(delay_ms: int = Query(default=500, ge=0, le=5000)) -> dict[str, object]
     import time
 
     time.sleep(delay_ms / 1000)
-    return {"ok": True, "delayMs": delay_ms}
+    return {"ok": True, "delayMs": delay_ms + 250}
 
 
 @app.get("/api/error")
