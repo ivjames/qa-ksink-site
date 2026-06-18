@@ -1,11 +1,13 @@
 import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api';
-const root = document.querySelector<HTMLDivElement>('#root');
+const rootElement = document.querySelector<HTMLDivElement>('#root');
 
-if (!root) {
+if (!rootElement) {
   throw new Error('Missing root element');
 }
+
+const root = rootElement;
 
 async function api(path: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
