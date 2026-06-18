@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+*.sqlite3
+.env
+.DS_Store
+coverage/
+playwright-report/
+test-results/
