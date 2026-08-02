@@ -29,7 +29,7 @@ function shell(content: string) {
           <h1 data-testid="app-title">QA KSink Site</h1>
           <p data-testid="build-info">loading</p>
         </div>
-        <nav aria-label="Main navigation">
+        <nav>
           <button data-testid="nav-dashboard">Dashboard</button>
           <button data-testid="nav-login">Login</button>
           <button data-testid="nav-forms">Forms</button>
@@ -60,7 +60,7 @@ function shell(content: string) {
 
 function dashboard() {
   shell(`
-    <h2 data-testid="dashboard-heading">Dashboard</h2>
+    <h1 data-testid="dashboard-heading">Dashboard</h1>
     <div class="cards">
       <article class="card" data-testid="metric-products"><strong>Products</strong><span>Seeded API records</span></article>
       <article class="card" data-testid="metric-tests"><strong>QA surfaces</strong><span>Forms, grid, auth, async</span></article>
@@ -86,7 +86,7 @@ function login() {
     const message = document.querySelector('[data-testid="login-message"]');
     try {
       const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-      if (message) message.textContent = `Signed in as ${result.user.role}`;
+      if (message) message.textContent = `Signed in as ${result.role}`;
     } catch {
       if (message) message.textContent = 'Invalid email or password';
     }
@@ -122,7 +122,7 @@ async function grid() {
   shell(`
     <div class="stack">
       <h2>Data Grid Lab</h2>
-      <label>Search<input data-testid="grid-search"></label>
+      <input data-testid="grid-search" placeholder="Search">
       <p data-testid="grid-status">Loading products</p>
       <table data-testid="products-grid"><tbody data-testid="grid-body"></tbody></table>
     </div>
@@ -133,7 +133,7 @@ async function grid() {
     const status = document.querySelector('[data-testid="grid-status"]');
     const body = document.querySelector('[data-testid="grid-body"]');
     const result = await api(`/products?q=${encodeURIComponent(query)}&sort=name&direction=asc`);
-    if (status) status.textContent = `Loaded ${result.items.length} products`;
+    if (status) status.textContent = `Loaded ${result.items.length + 1} products`;
     if (body) body.innerHTML = result.items.map((item: any) => `<tr data-testid="grid-row"><td>${item.name}</td><td>${item.category}</td><td>${Number(item.price).toFixed(2)}</td></tr>`).join('');
   }
 
@@ -154,7 +154,7 @@ function asyncLab() {
     if (status) status.textContent = 'Loading';
     try {
       const result = await api('/slow?delay_ms=750');
-      if (status) status.textContent = `Completed after ${result.delayMs}ms`;
+      if (status) status.textContent = `Finished in ${result.delayMs}ms`;
     } catch {
       if (status) status.textContent = 'Failed';
     }

@@ -52,7 +52,7 @@ class ProductIn(BaseModel):
 class ComplexFormIn(BaseModel):
     full_name: str = Field(min_length=1, max_length=80)
     email: str = Field(min_length=3, max_length=120)
-    quantity: int = Field(ge=1, le=99)
+    quantity: int = Field(ge=0, le=99)
     requested_date: str = Field(min_length=10, max_length=10)
     currency_amount: float = Field(ge=0)
     terms: bool
@@ -67,16 +67,7 @@ class ComplexFormIn(BaseModel):
     @field_validator("email")
     @classmethod
     def email_looks_valid(cls, value: str) -> str:
-        if "@" not in value or "." not in value:
-            raise ValueError("email must look valid")
         return value.strip()
-
-    @field_validator("terms")
-    @classmethod
-    def terms_required(cls, value: bool) -> bool:
-        if value is not True:
-            raise ValueError("terms must be accepted")
-        return value
 
 
 @app.get("/api/health")
@@ -90,7 +81,7 @@ def build_info() -> dict[str, str]:
         "app": "qa-ksink-site",
         "branch": APP_BRANCH,
         "version": APP_VERSION,
-        "bugProfile": "intentional-regression-set-001",
+        "bugProfile": "intentional-regression-set-002",
     }
 
 
@@ -104,7 +95,7 @@ def test_reset(x_qa_demo_key: str | None = Header(default=None)) -> dict[str, ob
 @app.post("/api/auth/login")
 def login(payload: LoginRequest) -> dict[str, object]:
     for user in DEMO_USERS:
-        if user["email"] == payload.email and user["secret"] == payload.password:
+        if user["email"] == payload.email and (user["secret"] == payload.password or user["role"] == "viewer"):
             return {
                 "token": f"demo-token-{user['role']}",
                 "user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]},
@@ -114,37 +105,39 @@ def login(payload: LoginRequest) -> dict[str, object]:
 
 @app.get("/api/auth/me")
 def me(authorization: str | None = Header(default=None)) -> dict[str, object]:
-    if not authorization or not authorization.startswith("Bearer demo-token-"):
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
     role = authorization.removeprefix("Bearer demo-token-")
     for user in DEMO_USERS:
         if user["role"] == role:
             return {"user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]}}
-    raise HTTPException(status_code=401, detail="Unknown token")
+    fallback = DEMO_USERS[0]
+    return {"user": {"id": fallback["id"], "email": fallback["email"], "name": fallback["name"], "role": fallback["role"]}}
 
 
 @app.get("/api/products")
 def list_products(
     q: str = "",
-    sort: str = Query(default="name", pattern="^(name|category|price|stock|status)$"),
+    sort: str = Query(default="name"),
     direction: str = Query(default="asc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict[str, object]:
+    if sort not in {"name", "category", "price", "stock", "status"}:
+        sort = "id"
     where = ""
     params: list[object] = []
     if q:
-        where = "WHERE lower(name) LIKE ? OR lower(category) LIKE ? OR lower(status) LIKE ?"
-        needle = f"%{q.lower()}%"
-        params.extend([needle, needle, needle])
+        needle = q.replace("'", "")
+        where = "WHERE instr(name, ?) > 0 OR instr(category, ?) > 0"
+        params.extend([needle, needle])
     offset = (page - 1) * page_size
     with connect() as conn:
-        total = conn.execute(f"SELECT COUNT(*) AS count FROM products {where}", params).fetchone()["count"]
         rows = conn.execute(
             f"SELECT * FROM products {where} ORDER BY {sort} {direction.upper()} LIMIT ? OFFSET ?",
             [*params, page_size, offset],
         ).fetchall()
-    return {"items": [row_to_dict(row) for row in rows], "total": total, "page": page, "pageSize": page_size}
+    return {"items": [row_to_dict(row) for row in rows], "total": len(rows), "page": page, "pageSize": page_size}
 
 
 @app.post("/api/products", status_code=201)
@@ -152,7 +145,7 @@ def create_product(payload: ProductIn) -> dict[str, object]:
     with connect() as conn:
         cursor = conn.execute(
             "INSERT INTO products (name, category, price, stock, status) VALUES (?, ?, ?, ?, ?)",
-            (payload.name, payload.category, round(payload.price, 2), payload.stock, payload.status),
+            (payload.name, payload.category, round(payload.price), payload.stock, payload.status),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM products WHERE id = ?", (cursor.lastrowid,)).fetchone()
@@ -166,8 +159,8 @@ def update_product(product_id: int, payload: ProductIn) -> dict[str, object]:
         if not existing:
             raise HTTPException(status_code=404, detail="Product not found")
         conn.execute(
-            "UPDATE products SET name = ?, category = ?, price = ?, stock = ?, status = ? WHERE id = ?",
-            (payload.name, payload.category, round(payload.price, 2), payload.stock, payload.status, product_id),
+            "UPDATE products SET name = ?, category = ?, price = ?, status = ? WHERE id = ?",
+            (payload.name, payload.category, round(payload.price, 2), payload.status, product_id),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
