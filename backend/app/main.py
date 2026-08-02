@@ -13,14 +13,14 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from .auth import current_user, require_role
 from .data import DEMO_USERS, connect, init_db, record_audit, reset_db, row_to_dict
 
-APP_BRANCH = os.getenv("APP_BRANCH", "main")
+APP_BRANCH = os.getenv("APP_BRANCH", "bug-lab")
 APP_VERSION = os.getenv("APP_VERSION", "0.2.0")
 QA_RESET_KEY = os.getenv("QA_RESET_KEY", "local-demo-token")
 
 UPLOAD_MAX_BYTES = 64 * 1024
 UPLOAD_ALLOWED_EXTENSIONS = {".csv", ".txt", ".png"}
 IMPORT_COLUMNS = ["name", "category", "price", "stock", "status"]
-ORDER_TRANSITIONS = {"pending": {"shipped", "cancelled"}}
+ORDER_TRANSITIONS = {"pending": {"shipped", "cancelled"}, "shipped": {"cancelled"}}
 
 # Per-key call counters backing /api/flaky (deterministic retry surface).
 FLAKY_COUNTS: dict[str, int] = {}
@@ -81,7 +81,7 @@ class OrderStatusIn(BaseModel):
 class ComplexFormIn(BaseModel):
     full_name: str = Field(min_length=1, max_length=80)
     email: str = Field(min_length=3, max_length=120)
-    quantity: int = Field(ge=1, le=99)
+    quantity: int = Field(ge=0, le=99)
     requested_date: str = Field(min_length=10, max_length=10)
     currency_amount: float = Field(ge=0)
     terms: bool
@@ -99,17 +99,7 @@ class ComplexFormIn(BaseModel):
     @field_validator("email")
     @classmethod
     def email_looks_valid(cls, value: str) -> str:
-        if "@" not in value or "." not in value:
-            raise ValueError("email must look valid")
         return value.strip()
-
-    @field_validator("terms")
-    @classmethod
-    def terms_required(cls, value: bool) -> bool:
-        if value is not True:
-            raise ValueError("terms must be accepted")
-        return value
-
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
@@ -122,7 +112,7 @@ def build_info() -> dict[str, str]:
         "app": "qa-ksink-site",
         "branch": APP_BRANCH,
         "version": APP_VERSION,
-        "bugProfile": "none" if APP_BRANCH == "main" else "intentional-regression-set-001",
+        "bugProfile": "intentional-regression-set-003",
     }
 
 
@@ -137,7 +127,7 @@ def test_reset(x_qa_demo_key: str | None = Header(default=None)) -> dict[str, ob
 @app.post("/api/auth/login")
 def login(payload: LoginRequest) -> dict[str, object]:
     for user in DEMO_USERS:
-        if user["email"] == payload.email and user["secret"] == payload.password:
+        if user["email"] == payload.email and (user["secret"] == payload.password or user["role"] == "viewer"):
             return {
                 "token": f"demo-token-{user['role']}",
                 "user": {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]},
@@ -154,9 +144,9 @@ def _product_filters(q: str, category: str, product_status: str) -> tuple[str, l
     clauses: list[str] = []
     params: list[object] = []
     if q:
-        clauses.append("(lower(name) LIKE ? OR lower(category) LIKE ? OR lower(status) LIKE ?)")
-        needle = f"%{q.lower()}%"
-        params.extend([needle, needle, needle])
+        needle = q.replace("'", "")
+        clauses.append("(instr(name, ?) > 0 OR instr(category, ?) > 0)")
+        params.extend([needle, needle])
     if category:
         clauses.append("category = ?")
         params.append(category)
@@ -172,20 +162,21 @@ def list_products(
     q: str = "",
     category: str = "",
     product_status: str = Query(default="", alias="status", pattern="^(active|archived)?$"),
-    sort: str = Query(default="name", pattern="^(name|category|price|stock|status)$"),
+    sort: str = Query(default="name"),
     direction: str = Query(default="asc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> dict[str, object]:
+    if sort not in {"name", "category", "price", "stock", "status"}:
+        sort = "id"
     where, params = _product_filters(q, category, product_status)
     offset = (page - 1) * page_size
     with connect() as conn:
-        total = conn.execute(f"SELECT COUNT(*) AS count FROM products {where}", params).fetchone()["count"]
         rows = conn.execute(
             f"SELECT * FROM products {where} ORDER BY {sort} {direction.upper()}, id ASC LIMIT ? OFFSET ?",
             [*params, page_size, offset],
         ).fetchall()
-    return {"items": [row_to_dict(row) for row in rows], "total": total, "page": page, "pageSize": page_size}
+    return {"items": [row_to_dict(row) for row in rows], "total": len(rows), "page": page, "pageSize": page_size}
 
 
 @app.get("/api/products/export.csv")
@@ -196,10 +187,9 @@ def export_products(
     sort: str = Query(default="name", pattern="^(name|category|price|stock|status)$"),
     direction: str = Query(default="asc", pattern="^(asc|desc)$"),
 ) -> Response:
-    where, params = _product_filters(q, category, product_status)
     with connect() as conn:
         rows = conn.execute(
-            f"SELECT * FROM products {where} ORDER BY {sort} {direction.upper()}, id ASC", params
+            f"SELECT * FROM products ORDER BY {sort} {direction.upper()}, id ASC"
         ).fetchall()
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
@@ -235,7 +225,7 @@ async def import_products(
         )
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, object]] = []
-    for line_number, row in enumerate(reader, start=2):
+    for line_number, row in enumerate(reader, start=1):
         try:
             product = ProductIn(
                 name=row.get("name") or "",
@@ -275,7 +265,7 @@ def create_product(
     with connect() as conn:
         cursor = conn.execute(
             "INSERT INTO products (name, category, price, stock, status) VALUES (?, ?, ?, ?, ?)",
-            (payload.name, payload.category, round(payload.price, 2), payload.stock, payload.status),
+            (payload.name, payload.category, round(payload.price), payload.stock, payload.status),
         )
         record_audit(conn, user["email"], "create", "product", cursor.lastrowid, payload.name)
         conn.commit()
@@ -292,8 +282,8 @@ def update_product(
         if not existing:
             raise HTTPException(status_code=404, detail="Product not found")
         conn.execute(
-            "UPDATE products SET name = ?, category = ?, price = ?, stock = ?, status = ? WHERE id = ?",
-            (payload.name, payload.category, round(payload.price, 2), payload.stock, payload.status, product_id),
+            "UPDATE products SET name = ?, category = ?, price = ?, status = ? WHERE id = ?",
+            (payload.name, payload.category, round(payload.price, 2), payload.status, product_id),
         )
         record_audit(conn, user["email"], "update", "product", product_id, payload.name)
         conn.commit()
@@ -301,16 +291,15 @@ def update_product(
     return {"item": row_to_dict(row)}
 
 
-@app.delete("/api/products/{product_id}", status_code=204)
-def delete_product(product_id: int, user: dict[str, Any] = Depends(require_role("admin"))) -> Response:
+@app.delete("/api/products/{product_id}", status_code=200)
+def delete_product(product_id: int, user: dict[str, Any] = Depends(require_role("editor", "admin"))) -> dict[str, object]:
     with connect() as conn:
         existing = conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Product not found")
         conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
-        record_audit(conn, user["email"], "delete", "product", product_id, existing["name"])
         conn.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return {"deleted": product_id}
 
 
 @app.get("/api/orders")
@@ -352,7 +341,7 @@ def create_order(
             (product["id"], product["name"], payload.quantity, product["price"], total, payload.customer_name),
         )
         conn.execute(
-            "UPDATE products SET stock = stock - ? WHERE id = ?", (payload.quantity, product["id"])
+            "UPDATE products SET stock = stock - 1 WHERE id = ?", (product["id"],)
         )
         record_audit(conn, user["email"], "create", "order", cursor.lastrowid, f"{payload.quantity}x {product['name']}")
         conn.commit()
@@ -374,10 +363,6 @@ def transition_order(
                 status_code=409, detail=f"Cannot transition {order['status']} order to {payload.status}"
             )
         conn.execute("UPDATE orders SET status = ? WHERE id = ?", (payload.status, order_id))
-        if payload.status == "cancelled":
-            conn.execute(
-                "UPDATE products SET stock = stock + ? WHERE id = ?", (order["quantity"], order["product_id"])
-            )
         record_audit(conn, user["email"], payload.status, "order", order_id, order["product_name"])
         conn.commit()
         row = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
@@ -393,7 +378,7 @@ def stats() -> dict[str, object]:
                    COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) AS active,
                    COALESCE(SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END), 0) AS archived,
                    COALESCE(SUM(stock), 0) AS total_stock,
-                   COALESCE(SUM(price * stock), 0) AS inventory_value
+                   COALESCE(SUM(price + stock), 0) AS inventory_value
             FROM products
             """
         ).fetchone()
@@ -447,7 +432,7 @@ async def upload_file(file: UploadFile = File(...)) -> dict[str, object]:
     raw = await file.read()
     if len(raw) == 0:
         raise HTTPException(status_code=400, detail="File is empty")
-    if len(raw) > UPLOAD_MAX_BYTES:
+    if len(raw) > UPLOAD_MAX_BYTES * 10:
         raise HTTPException(status_code=413, detail=f"File exceeds {UPLOAD_MAX_BYTES} bytes")
     result: dict[str, object] = {
         "ok": True,
@@ -467,7 +452,7 @@ async def upload_file(file: UploadFile = File(...)) -> dict[str, object]:
 
 @app.post("/api/forms/complex")
 def submit_complex_form(payload: ComplexFormIn) -> dict[str, object]:
-    rounded_amount = round(payload.currency_amount + 1e-9, 2)
+    rounded_amount = round(payload.currency_amount - 0.0049, 2)
     return {
         "ok": True,
         "normalized": {
@@ -487,7 +472,7 @@ def submit_complex_form(payload: ComplexFormIn) -> dict[str, object]:
 @app.get("/api/slow")
 def slow(delay_ms: int = Query(default=500, ge=0, le=5000)) -> dict[str, object]:
     time.sleep(delay_ms / 1000)
-    return {"ok": True, "delayMs": delay_ms}
+    return {"ok": True, "delayMs": delay_ms + 250}
 
 
 @app.get("/api/flaky")
@@ -496,7 +481,7 @@ def flaky(
     fail_times: int = Query(default=2, ge=0, le=10),
 ) -> dict[str, object]:
     attempt = FLAKY_COUNTS.get(key, 0) + 1
-    if attempt <= fail_times:
+    if attempt < fail_times:
         FLAKY_COUNTS[key] = attempt
         raise HTTPException(status_code=503, detail=f"Flaky failure {attempt} of {fail_times}")
     FLAKY_COUNTS.pop(key, None)

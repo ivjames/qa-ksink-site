@@ -2,7 +2,7 @@ import { api } from '../api';
 
 export async function renderDashboard(container: HTMLElement): Promise<void> {
   container.innerHTML = `
-    <h2 data-testid="dashboard-heading">Dashboard</h2>
+    <h1 data-testid="dashboard-heading">Dashboard</h1>
     <div class="cards">
       <article class="card" data-testid="metric-products">
         <strong data-testid="stat-products-total">–</strong>

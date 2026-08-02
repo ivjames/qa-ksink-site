@@ -63,20 +63,6 @@ export function openModal(options: ModalOptions): void {
       close();
       return;
     }
-    if (event.key !== 'Tab') return;
-    const focusable = Array.from(overlay.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      (el) => el.offsetParent !== null
-    );
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
   }
 
   overlay.addEventListener('mousedown', (event) => {

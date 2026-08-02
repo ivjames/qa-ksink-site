@@ -98,7 +98,7 @@ curl -s https://<fqdn>/api/health                  # {"status":"ok"}
 
 ```bash
 curl -s https://qa-bugs.lab980.com/api/build-info; echo
-#   bugProfile: intentional-regression-set-002
+#   bugProfile: intentional-regression-set-003
 
 curl -s "https://qa-bugs.lab980.com/api/products?q=anvil" \
   | python3 -c "import json,sys; print('items:', len(json.load(sys.stdin)['items']))"

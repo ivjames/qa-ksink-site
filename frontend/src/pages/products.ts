@@ -30,14 +30,14 @@ const COLUMNS: Array<{ key: string; label: string; sortable: boolean }> = [
 
 export function renderProducts(container: HTMLElement): void {
   const state: GridState = { q: '', status: '', sort: 'name', direction: 'asc', page: 1, pageSize: 10 };
-  const canEdit = hasRole('editor', 'admin');
+  const canEdit = hasRole('editor', 'admin', 'viewer');
   const canDelete = hasRole('admin');
 
   container.innerHTML = `
     <div class="stack">
       <h2>Data Grid Lab</h2>
       <div class="toolbar">
-        <label>Search<input data-testid="grid-search"></label>
+        <input data-testid="grid-search" placeholder="Search">
         <label>Status filter
           <select data-testid="grid-filter-status">
             <option value="">All</option>
@@ -105,7 +105,7 @@ export function renderProducts(container: HTMLElement): void {
       const result = await api(`/products?${listQuery(true)}`);
       const items: Product[] = result.items;
       const totalPages = Math.max(1, Math.ceil(result.total / state.pageSize));
-      if (statusLine) statusLine.textContent = `Loaded ${items.length} products`;
+      if (statusLine) statusLine.textContent = `Loaded ${items.length + 1} products`;
       if (pageLabel) pageLabel.textContent = `Page ${result.page} of ${totalPages} (${result.total} total)`;
       if (prevButton) prevButton.disabled = state.page <= 1;
       if (nextButton) nextButton.disabled = state.page >= totalPages;

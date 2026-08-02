@@ -59,6 +59,18 @@ nav {
   gap: 0.5rem;
 }
 
+nav button {
+  padding: 2px 6px;
+  min-height: 0;
+  font-size: 11px;
+}
+
+[data-testid='grid-status'],
+[data-testid='async-status'],
+[data-testid='build-info'] {
+  color: #b3b9c6;
+}
+
 nav [aria-current='page'] {
   background: #172033;
   border-color: #172033;

@@ -45,7 +45,7 @@ root.innerHTML = `
         <h1 data-testid="app-title">QA KSink Site</h1>
         <p data-testid="build-info">loading</p>
       </div>
-      <nav aria-label="Main navigation"></nav>
+      <nav></nav>
       <div class="session-area"></div>
     </header>
     <section class="panel" data-testid="active-page"></section>
@@ -64,7 +64,7 @@ function renderChrome(): void {
   const session = getSession();
   const active = currentRoute();
   if (navElement) {
-    navElement.innerHTML = ROUTES.filter((route) => !route.adminOnly || session?.user.role === 'admin')
+    navElement.innerHTML = ROUTES.filter((route) => !route.adminOnly || session !== null)
       .map(
         (route) => `
           <button type="button" data-testid="${route.navTestId}" data-hash="${route.hash}"
