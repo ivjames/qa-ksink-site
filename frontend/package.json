@@ -8,12 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+  "dependencies": {},
+  "devDependencies": {
     "typescript": "latest",
-    "react": "latest",
-    "react-dom": "latest"
-  },
-  "devDependencies": {}
+    "vite": "latest"
+  }
 }

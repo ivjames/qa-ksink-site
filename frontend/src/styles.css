@@ -7,9 +7,10 @@
 
 body {
   margin: 0;
+  background: #f5f7fb;
 }
 
-button, input, select {
+button, input, select, textarea {
   font: inherit;
 }
 
@@ -18,11 +19,23 @@ button {
   background: #ffffff;
   border-radius: 8px;
   padding: 0.55rem 0.8rem;
+  min-height: 32px;
   cursor: pointer;
+  color: #172033;
 }
 
 button:hover, button:focus {
   outline: 3px solid #cbd5e1;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button.danger {
+  border-color: #9f1239;
+  color: #9f1239;
 }
 
 .app-shell {
@@ -37,12 +50,26 @@ button:hover, button:focus {
   gap: 1rem;
   align-items: flex-start;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 nav {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+nav [aria-current='page'] {
+  background: #172033;
+  border-color: #172033;
+  color: #ffffff;
+}
+
+.session-area {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
 }
 
 .panel, .card {
@@ -59,6 +86,10 @@ nav {
   gap: 1rem;
 }
 
+.card strong {
+  font-size: 1.5rem;
+}
+
 .card span {
   display: block;
   margin-top: 0.5rem;
@@ -67,7 +98,20 @@ nav {
 .stack {
   display: grid;
   gap: 0.8rem;
-  max-width: 680px;
+  max-width: 880px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.8rem;
 }
 
 label {
@@ -76,10 +120,45 @@ label {
   font-weight: 700;
 }
 
-input, select {
+label.inline {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+input, select, textarea {
   padding: 0.55rem;
   border: 1px solid #9aa6bd;
   border-radius: 8px;
+  min-height: 24px;
+  min-width: 24px;
+}
+
+input[type='checkbox'], input[type='radio'] {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+fieldset {
+  border: 1px solid #d8deea;
+  border-radius: 8px;
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+legend {
+  font-weight: 700;
+  padding: 0 0.3rem;
+}
+
+.demo-accounts {
+  padding: 0.8rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
 }
 
 table {
@@ -93,10 +172,168 @@ th, td {
   text-align: left;
 }
 
+.sort-button {
+  border: none;
+  background: none;
+  padding: 0.25rem;
+  min-height: 24px;
+  font-weight: 700;
+}
+
+th[aria-sort='ascending'] .sort-button::after {
+  content: ' \2191';
+}
+
+th[aria-sort='descending'] .sort-button::after {
+  content: ' \2193';
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  font-weight: 700;
+}
+
+.badge-active, .badge-shipped {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge-archived, .badge-cancelled {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.badge-pending {
+  background: #fef9c3;
+  color: #713f12;
+}
+
+.field-error {
+  color: #9f1239;
+  font-weight: 400;
+  min-height: 1em;
+}
+
+.result-block {
+  background: #f1f5f9;
+  border: 1px solid #d8deea;
+  border-radius: 8px;
+  padding: 0.8rem;
+  overflow-x: auto;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+
+.detail-list dt {
+  font-weight: 700;
+}
+
+.detail-list dd {
+  margin: 0;
+}
+
 .error {
   color: #9f1239;
 }
 
 .success {
   color: #166534;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 32, 51, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 40;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem;
+  max-width: 520px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-close {
+  min-width: 32px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.toast-region {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.5rem;
+  z-index: 50;
+}
+
+.toast {
+  background: #172033;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.toast-error {
+  background: #9f1239;
+}
+
+.toast-success {
+  background: #166534;
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    flex-direction: column;
+  }
+
+  .row-actions {
+    flex-direction: column;
+  }
 }
