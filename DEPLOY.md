@@ -94,11 +94,13 @@ curl -s https://<fqdn>/api/health                  # {"status":"ok"}
 ```
 
 `qa-bugs` specifically — these prove the **seeded-bug** code is live, which
-`build-info` alone cannot (build-info can be right while the rest is stale):
+`build-info` alone cannot (build-info can be right while the rest is stale).
+All three verified against both hosts on 2026-09-07; the expected values below
+are what they actually returned:
 
 ```bash
 curl -s https://qa-bugs.lab980.com/api/build-info; echo
-#   bugProfile: intentional-regression-set-002
+#   bugProfile: intentional-regression-set-003
 
 curl -s "https://qa-bugs.lab980.com/api/products?q=anvil" \
   | python3 -c "import json,sys; print('items:', len(json.load(sys.stdin)['items']))"
@@ -124,8 +126,24 @@ regressions are visible (low-contrast status text, missing labels, etc.).
   `pm2 list`.
 - **APP_BRANCH.** `build-info` reports `branch` from the `APP_BRANCH` env
   (default is the branch name baked into `main.py`). If the unit sets it,
-  `systemctl cat` shows it; the `bugProfile` string is fixed per branch and
-  does not depend on it.
+  `systemctl cat` shows it.
+
+  `bugProfile` is fixed on `bug-lab` but **not** on `main`, so it is not
+  branch-independent the way this note used to say. The two branches compute
+  it differently:
+
+  ```python
+  # bug-lab: backend/app/main.py — a literal
+  "bugProfile": "intentional-regression-set-003",
+
+  # main: backend/app/main.py — derived from APP_BRANCH
+  "bugProfile": "none" if APP_BRANCH == "main" else "intentional-regression-set-001",
+  ```
+
+  So on `qa-demo`, setting `APP_BRANCH` to anything other than `main` makes a
+  clean site report `intentional-regression-set-001` — a profile string that
+  matches no branch in this repo. Read `bugProfile` together with `branch`, and
+  on `qa-demo` confirm `APP_BRANCH` is unset or `main` before trusting either.
 - **First-time provision** used the shared `provision-site` tool (nginx vhost
   + TLS) with the static-root + `/api` proxy wired by hand and a systemd unit
   per site; this repo ships no provision script of its own.
